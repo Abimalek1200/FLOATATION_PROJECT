@@ -67,7 +67,7 @@ sudo apt install -y \
     libv4l-dev \
     libxvidcore-dev \
     libx264-dev \
-ny    libhdf5-dev \
+    libhdf5-dev \
     libhdf5-serial-dev \
     libharfbuzz-dev \
     libwebp-dev \

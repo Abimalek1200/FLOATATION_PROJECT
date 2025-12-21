@@ -128,29 +128,32 @@ class Camera:
             return False, None
     
     def get_frame_rate(self) -> float:
-        """Calculate actual frame rate based on capture timing.
+        """Calculate actual frame rate based on recent captures.
         
         Returns:
-            Frames per second (estimated)
+            Frames per second (estimated from last 30 frames)
+            
+        Example:
+            >>> fps = camera.get_frame_rate()
+            >>> print(f"Running at {fps:.1f} FPS")
         """
         if not hasattr(self, '_frame_times'):
             self._frame_times = []
         
-        current_time = time.time()
-        self._frame_times.append(current_time)
+        # Record current time
+        self._frame_times.append(time.time())
         
-        # Keep only last 30 frame timestamps
+        # Keep only recent 30 timestamps (prevents memory growth)
         if len(self._frame_times) > 30:
             self._frame_times.pop(0)
         
+        # Need at least 2 points to calculate rate
         if len(self._frame_times) < 2:
             return 0.0
         
-        # Calculate FPS from time differences
-        time_span = self._frame_times[-1] - self._frame_times[0]
-        if time_span > 0:
-            return (len(self._frame_times) - 1) / time_span
-        return 0.0
+        # FPS = frames / time_elapsed
+        elapsed = self._frame_times[-1] - self._frame_times[0]
+        return (len(self._frame_times) - 1) / elapsed if elapsed > 0 else 0.0
     
     def is_healthy(self) -> bool:
         """Check if camera is operating normally.

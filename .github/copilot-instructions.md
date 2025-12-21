@@ -425,31 +425,61 @@ websockets==12.0
 
 ## Important Notes for AI Assistants
 
+### Code Quality & Maintainability Principles
+- **Student-Friendly Code**: Write clear, well-commented code that students can easily debug and understand
+  - Use descriptive variable names (e.g., `bubble_count` not `bc`)
+  - Add inline comments explaining WHY, not just WHAT
+  - Break complex operations into smaller, named functions
+  - Include example usage in docstrings
+  - Maintain high engineering functionality while keeping readability first
+  
+- **Code Brevity**: Keep code concise without sacrificing clarity
+  - Avoid lengthy programs - prefer modular, focused functions (<50 lines)
+  - Use Python built-ins and comprehensions where they improve readability
+  - Eliminate redundant code through helper functions
+  - Single responsibility principle - one function, one job
+  - If a file exceeds 200 lines, consider splitting into modules
+
 ### Domain-Specific Considerations
 - **Froth Characteristics**: More/larger bubbles = over-frothing (reduce dosage), fewer/smaller = under-frothing
 - **Control Loop Timing**: Target 1-2 second cycle time (froth responds slowly, faster sampling wastes CPU)
 - **Vision vs Reality**: Bubble count is proxy for frother concentration (indirect measurement)
--**additioan cintrol**: in the control panel add Manual control for the agitator, air pump and feed pump 
+- **Additional Control**: Manual control for agitator, air pump and feed pump in control panel
 - **RPi Constraints**: 4GB RAM shared with GPU, avoid >500MB data structures, use generators not lists
 - **Reagent Economy**: Overcontrol wastes expensive frother - prefer slight underdamping
 
 ### When Writing Code
 - **Logging levels**: DEBUG=vision details, INFO=control actions, WARNING=anomalies, ERROR=hardware fails
-- **Type hints**: Always use (helps with debugging on headless RPi)
+- **Type hints**: Always use (helps students and debugging on headless RPi)
   ```python
   def analyze_froth(frame: np.ndarray) -> Dict[str, float]:
+      """Analyze froth characteristics from camera frame.
+      
+      Args:
+          frame: BGR image from camera (shape: height x width x 3)
+      
+      Returns:
+          Dictionary with bubble_count, avg_size, stability (0-1)
+      
+      Example:
+          >>> metrics = analyze_froth(camera_frame)
+          >>> print(f"Bubbles detected: {metrics['bubble_count']}")
+      """
   ```
 - **Config-driven**: Read thresholds from JSON, never hardcode magic numbers
 - **Stateless functions**: Vision/control functions should be pure (testable without hardware)
 - **Error propagation**: Raise exceptions for hardware errors, return None for missing data
 - **Async API**: Use FastAPI async endpoints to avoid blocking event loop
-- **Docstrings**: Include units, valid ranges, and sample values
+- **Docstrings**: Include units, valid ranges, sample values, AND examples
   ```python
   def set_pump_rate(duty_cycle: float):
       """Set peristaltic pump PWM duty cycle.
       
       Args:
           duty_cycle: 0-100 (percentage), maps to 0-100 mL/min frother flow
+      
+      Example:
+          >>> set_pump_rate(50)  # 50% duty cycle = 50 mL/min
       """
   ```
 

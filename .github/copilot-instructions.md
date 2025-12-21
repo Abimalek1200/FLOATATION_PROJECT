@@ -47,7 +47,7 @@ Automated reagent dosing control system for small-to-medium scale gold mines in 
 - **Vision Processing**: OpenCV (cv2), NumPy
 - **Machine Learning**: scikit-learn (Isolation Forest)
 - **Frontend**: Vanilla HTML/CSS/JS with Chart.js for visualization
-- **Hardware Control**: RPi.GPIO, pigpio (PWM control)
+- **Hardware Control**: lgpio (Raspberry Pi 5 native GPIO library, PWM control)
 - **Data Storage**: SQLite (limited by RPi storage constraints)
 - **Real-time Communication**: WebSockets (Server-Sent Events as fallback)
 
@@ -165,8 +165,7 @@ class PIController:
 
 **Pump Control** (src/control/pump_driver.py):
 ```python
-import pigpio  # Better PWM than RPi.GPIO
-pi = pigpio.pi()
+import lgpio  # Raspberry Pi 5 native GPIO library
 
 # GPIO Pin Assignments
 FROTHER_PUMP_PIN = 12  # Hardware PWM (PWM0)
@@ -174,13 +173,15 @@ AGITATOR_PIN = 13      # Hardware PWM (PWM1)
 AIR_PUMP_PIN = 14      # Software PWM
 FEED_PUMP_PIN = 15     # Software PWM
 
-# Initialize PWM for all devices
+# Open GPIO chip (Raspberry Pi 5)
+chip = lgpio.gpiochip_open(0)
+
+# Initialize PWM for all devices (1kHz, 0% duty cycle)
 for pin in [FROTHER_PUMP_PIN, AGITATOR_PIN, AIR_PUMP_PIN, FEED_PUMP_PIN]:
-    pi.set_PWM_frequency(pin, 1000)  # 1kHz PWM
-    pi.set_PWM_dutycycle(pin, 0)     # Start stopped
+    lgpio.tx_pwm(chip, pin, 1000, 0)  # frequency=1kHz, duty_cycle=0%
 
 # Control frother pump (example)
-pi.set_PWM_dutycycle(FROTHER_PUMP_PIN, duty_cycle)  # 0-255
+lgpio.tx_pwm(chip, FROTHER_PUMP_PIN, 1000, duty_cycle)  # duty_cycle 0-100%
 ```
 
 ### 3. Anomaly Detection (src/ml/)
@@ -351,14 +352,13 @@ sudo raspi-config nonint do_i2c 0
 
 # Install system dependencies
 sudo apt update
-sudo apt install -y python3-opencv python3-pigpio libatlas-base-dev
+sudo apt install -y python3-opencv python3-lgpio python3-rpi-lgpio libopenblas-dev
 
 # Python dependencies
-pip3 install -r requirements.txt
+pip3 install -r requirements.txt --break-system-packages
 
-# Enable pigpio daemon
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+# Test lgpio installation
+python3 -c "import lgpio; chip=lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(chip)"
 
 # Create systemd service
 sudo cp flotation.service /etc/systemd/system/
@@ -369,7 +369,7 @@ sudo systemctl enable flotation.service
 ```ini
 [Unit]
 Description=Flotation Control System
-After=network.target pigpiod.service
+After=network.target
 
 [Service]
 Type=simple
@@ -390,10 +390,10 @@ uvicorn[standard]==0.24.0
 opencv-python==4.8.1.78
 numpy==1.24.3
 scikit-learn==1.3.2
-pigpio==1.78
 psutil==5.9.6
 python-multipart==0.0.6
 websockets==12.0
+# Note: lgpio is installed via apt (python3-lgpio), not pip
 ```
 
 ## Project-Specific Conventions

@@ -24,10 +24,10 @@ scikit-learn==1.3.2
 scipy==1.11.4
 
 # ========================================
-# Hardware Control (Raspberry Pi)
+# Hardware Control (Raspberry Pi 5)
 # ========================================
-pigpio==1.78
-RPi.GPIO==0.7.1
+# Note: lgpio is installed via apt (python3-lgpio)
+# No pip installation needed for lgpio
 
 # ========================================
 # System Monitoring

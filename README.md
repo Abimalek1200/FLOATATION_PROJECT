@@ -47,7 +47,7 @@ Automated reagent dosing control system for small-to-medium scale gold flotation
 ### System Libraries
 Automatically installed by `setup.sh`:
 - OpenCV dependencies
-- pigpio daemon
+- lgpio (Raspberry Pi 5 GPIO library)
 - NumPy/SciPy libraries
 - FastAPI/Uvicorn
 
@@ -86,15 +86,14 @@ chmod +x setup.sh
 ```
 
 The setup script will:
-- ✅ Update system packages
-- ✅ Enable camera, I2C, SPI interfaces
-- ✅ Install system dependencies (OpenCV, pigpio, etc.)
-- ✅ Install Python packages from requirements.txt
-- ✅ Configure pigpio daemon for PWM control
+- ✅ Install lgpio for Raspberry Pi 5 GPIO control
+- ✅ Configure camera permissions
 - ✅ Create project directory structure
 - ✅ Generate default configuration files
 - ✅ Create systemd service for auto-start
 - ✅ Set proper file permissions
+
+**Note**: Steps 1-4 (system update, hardware interfaces, dependencies) should be completed before running this script.
 
 ### Step 4: Configure Static IP (Recommended)
 
@@ -130,8 +129,8 @@ After reboot:
 # Check camera detection
 vcgencmd get_camera
 
-# Verify pigpio daemon
-sudo systemctl status pigpiod
+# Verify lgpio installation
+python3 -c 'import lgpio; chip=lgpio.gpiochip_open(0); print("lgpio OK"); lgpio.gpiochip_close(chip)'
 
 # Test Python imports
 python3 -c "import cv2, numpy, sklearn, fastapi; print('All imports successful')"
@@ -359,16 +358,19 @@ vcgencmd get_throttled
 # No software control needed - it's powered directly
 ```
 
-### pigpio Daemon Not Running
+### lgpio Not Working
+
 ```bash
-# Start daemon manually
-sudo systemctl start pigpiod
+# Reinstall lgpio
+sudo apt install -y python3-lgpio python3-rpi-lgpio
 
-# Check status
-sudo systemctl status pigpiod
+# Test lgpio import
+python3 -c 'import lgpio; print("lgpio imported successfully")'
 
-# Enable auto-start
-sudo systemctl enable pigpiod
+# Test GPIO chip access
+python3 -c 'import lgpio; chip=lgpio.gpiochip_open(0); print("GPIO chip opened successfully"); lgpio.gpiochip_close(chip)'
+
+# Note: lgpio requires no daemon - direct hardware access
 ```
 
 ### High CPU Usage

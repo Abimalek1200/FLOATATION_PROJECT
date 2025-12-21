@@ -44,7 +44,7 @@ def check_prerequisites():
     # Check required modules
     required_modules = [
         'cv2', 'numpy', 'sklearn', 'fastapi', 
-        'uvicorn', 'pigpio', 'psutil', 'websockets'
+        'uvicorn', 'lgpio', 'psutil', 'websockets'
     ]
     
     missing_modules = []
@@ -56,7 +56,7 @@ def check_prerequisites():
     
     if missing_modules:
         logger.error(f"Missing required modules: {', '.join(missing_modules)}")
-        logger.error("Run: pip3 install -r requirements.txt")
+        logger.error("Run setup script or install manually: sudo apt install python3-lgpio")
         return False
     
     # Check if running on Raspberry Pi
@@ -68,16 +68,15 @@ def check_prerequisites():
     except FileNotFoundError:
         logger.warning("Could not detect Raspberry Pi")
     
-    # Check pigpio daemon
+    # Check lgpio (Raspberry Pi 5)
     try:
-        import pigpio
-        pi = pigpio.pi()
-        if not pi.connected:
-            logger.error("pigpio daemon not running. Start with: sudo systemctl start pigpiod")
-            return False
-        pi.stop()
+        import lgpio
+        chip = lgpio.gpiochip_open(0)
+        logger.info("✓ lgpio GPIO access verified")
+        lgpio.gpiochip_close(chip)
     except Exception as e:
-        logger.error(f"pigpio check failed: {e}")
+        logger.error(f"lgpio check failed: {e}")
+        logger.error("Install with: sudo apt install python3-lgpio")
         return False
     
     # Check camera availability

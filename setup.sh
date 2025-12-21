@@ -70,6 +70,20 @@ fi
 echo ""
 echo "Note: Raspberry Pi 5 uses lgpio instead of pigpio"
 echo "      No daemon required - direct hardware access"
+    if [ $? -eq 0 ]; then
+        echo "✓ lgpio fully operational and ready for PWM control"
+    else
+        echo "⚠ WARNING: lgpio installed but connection test failed"
+    fi
+else
+    echo "✗ ERROR: lgpio installation failed"
+    echo "  Try manually: sudo apt install -y python3-lgpio"
+    exit 1
+fi
+
+echo ""
+echo "Note: Raspberry Pi 5 uses lgpio instead of pigpio"
+echo "      No daemon required - direct hardware access"
 
 # ========================================
 # STEP 6: Configure Camera
@@ -125,7 +139,8 @@ echo "[4/4] Creating systemd service..."
 sudo tee /etc/systemd/system/flotation.service > /dev/null <<EOF
 [Unit]
 Description=Flotation Control System
-After=network.target
+After=network.target pigpiod.service
+Requires=pigpiod.service
 
 [Service]
 Type=simple
@@ -274,21 +289,16 @@ echo "Continued Setup Completed Successfully!"
 echo "========================================="
 echo ""
 echo "Configuration Summary:"
-echo "  ✓ lgpio (Raspberry Pi 5 GPIO library) installed"
+echo "  ✓ pigpiod daemon configured and running"
 echo "  ✓ Camera permissions set"
 echo "  ✓ Project directories created"
 echo "  ✓ Systemd service installed"
 echo "  ✓ Configuration files generated"
 echo ""
-echo "IMPORTANT: Raspberry Pi 5 uses lgpio (not pigpio)"
-echo "  - No daemon required"
-echo "  - Direct hardware access"
-echo "  - Better performance than pigpio"
-echo ""
 echo "Next steps:"
 echo ""
-echo "1. Verify lgpio is working:"
-echo "   python3 -c 'import lgpio; chip=lgpio.gpiochip_open(0); print(\"lgpio OK\"); lgpio.gpiochip_close(chip)'"
+echo "1. Verify pigpio is working:"
+echo "   python3 -c 'import pigpio; pi=pigpio.pi(); print(\"Connected:\", pi.connected); pi.stop()'"
 echo ""
 echo "2. Test camera access:"
 echo "   python3 -c 'import cv2; print(\"Camera OK:\", cv2.VideoCapture(0).isOpened())'"
@@ -313,9 +323,9 @@ echo "   OR"
 echo "   http://raspberrypi.local:8000"
 echo ""
 echo "Troubleshooting:"
+echo "  - If pigpio fails: sudo pigpiod"
 echo "  - Check camera: ls /dev/video*"
 echo "  - Service logs: sudo journalctl -u flotation -f"
-echo "  - lgpio test: python3 -c 'import lgpio; print(lgpio.gpiochip_open(0))'"
 echo ""
 echo "Configuration files location: $PROJECT_DIR/config/"
 echo "========================================="

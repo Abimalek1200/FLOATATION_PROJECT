@@ -70,21 +70,6 @@ fi
 echo ""
 echo "Note: Raspberry Pi 5 uses lgpio instead of pigpio"
 echo "      No daemon required - direct hardware access"
-if
-    if [ $? -eq 0 ]; then
-        echo "✓ lgpio fully operational and ready for PWM control"
-    else
-        echo "⚠ WARNING: lgpio installed but connection test failed"
-    fi
-else
-    echo "✗ ERROR: lgpio installation failed"
-    echo "  Try manually: sudo apt install -y python3-lgpio"
-    exit 1
-fi
-
-echo ""
-echo "Note: Raspberry Pi 5 uses lgpio instead of pigpio"
-echo "      No daemon required - direct hardware access"
 
 # ========================================
 # STEP 6: Configure Camera

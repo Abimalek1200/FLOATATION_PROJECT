@@ -28,107 +28,48 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # ========================================
-# STEP 5: Setup pigpio Daemon (Pi 5 Compatible)
+# STEP 5: Install lgpio for Raspberry Pi 5
 # ========================================
 
 echo ""
-echo "[1/4] Configuring pigpio daemon for PWM control (Pi 5)..."
+echo "[1/4] Installing lgpio (Raspberry Pi 5 GPIO library)..."
 
-# Check if python3-pigpio is installed
-if dpkg -l | grep -q "ii  python3-pigpio"; then
-    echo "✓ python3-pigpio package found"
-else
-    echo "Installing python3-pigpio..."
-    sudo apt install -y python3-pigpio
-fi
+# Install lgpio - native GPIO library for Raspberry Pi 5
+sudo apt install -y python3-lgpio python3-rpi-lgpio
 
-# Check if pigpiod systemd service exists
-if [ -f /lib/systemd/system/pigpiod.service ]; then
-    echo "✓ Found existing pigpiod systemd service"
-    sudo systemctl enable pigpiod
-    sudo systemctl start pigpiod
+# Verify installation
+if python3 -c "import lgpio" 2>/dev/null; then
+    echo "✓ lgpio installed successfully"
     
-    if systemctl is-active --quiet pigpiod; then
-        echo "✓ pigpiod daemon started via systemd"
-    else
-        echo "⚠ systemd service exists but failed to start, trying manual start..."
-        sudo pigpiod
-    fi
-else
-    # No systemd service found - create one
-    echo "⚠ No systemd service found, creating pigpiod.service..."
-    
-    sudo tee /lib/systemd/system/pigpiod.service > /dev/null <<'PIGPIO_SERVICE'
-[Unit]
-Description=Pigpio daemon
-After=network.target
-
-[Service]
-Type=forking
-ExecStart=/usr/bin/pigpiod -l
-ExecStop=/bin/systemctl kill pigpiod
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-PIGPIO_SERVICE
-
-    # Reload systemd and enable service
-    sudo systemctl daemon-reload
-    sudo systemctl enable pigpiod
-    sudo systemctl start pigpiod
-    
-    echo "✓ Created and started pigpiod.service"
-fi
-
-# Final verification - check if pigpiod process is running
-sleep 2  # Give daemon time to start
-
-if pgrep -x pigpiod > /dev/null; then
-    PIGPIO_PID=$(pgrep pigpiod)
-    echo "✓ pigpiod daemon is running (PID: $PIGPIO_PID)"
-    
-    # Test Python connection
+    # Test lgpio connection
     python3 << 'PYEOF'
 import sys
 try:
-    import pigpio
-    pi = pigpio.pi()
-    if pi.connected:
-        print("✓ pigpio connection test SUCCESSFUL")
-        print(f"  Hardware: {pi.get_hardware_revision()}")
-        print(f"  pigpio version: {pi.get_pigpio_version()}")
-        pi.stop()
-        sys.exit(0)
-    else:
-        print("✗ pigpio daemon running but connection failed")
-        print("  Check that pigpiod is listening on port 8888")
-        sys.exit(1)
+    import lgpio
+    chip = lgpio.gpiochip_open(0)
+    print("✓ lgpio connection test SUCCESSFUL")
+    print(f"  GPIO chip 0 opened successfully")
+    lgpio.gpiochip_close(chip)
+    sys.exit(0)
 except Exception as e:
-    print(f"✗ pigpio test error: {e}")
+    print(f"✗ lgpio test error: {e}")
     sys.exit(1)
 PYEOF
 
     if [ $? -eq 0 ]; then
-        echo "✓ pigpio fully operational and ready for PWM control"
+        echo "✓ lgpio fully operational and ready for PWM control"
     else
-        echo "⚠ WARNING: pigpiod running but connection test failed"
-        echo "  Try restarting: sudo systemctl restart pigpiod"
-        echo "  Or manual start: sudo pigpiod"
+        echo "⚠ WARNING: lgpio installed but connection test failed"
     fi
 else
-    echo "✗ ERROR: pigpiod daemon failed to start"
-    echo ""
-    echo "Troubleshooting steps:"
-    echo "1. Try manual start: sudo pigpiod"
-    echo "2. Check if already running: pgrep pigpiod"
-    echo "3. Check logs: sudo journalctl -u pigpiod -n 50"
-    echo "4. Verify installation: which pigpiod"
-    echo ""
-    echo "The system will continue setup, but GPIO control will not work"
-    echo "until pigpiod is running."
+    echo "✗ ERROR: lgpio installation failed"
+    echo "  Try manually: sudo apt install -y python3-lgpio"
+    exit 1
 fi
+
+echo ""
+echo "Note: Raspberry Pi 5 uses lgpio instead of pigpio"
+echo "      No daemon required - direct hardware access"
 
 # ========================================
 # STEP 6: Configure Camera
@@ -184,8 +125,7 @@ echo "[4/4] Creating systemd service..."
 sudo tee /etc/systemd/system/flotation.service > /dev/null <<EOF
 [Unit]
 Description=Flotation Control System
-After=network.target pigpiod.service
-Requires=pigpiod.service
+After=network.target
 
 [Service]
 Type=simple
@@ -334,16 +274,21 @@ echo "Continued Setup Completed Successfully!"
 echo "========================================="
 echo ""
 echo "Configuration Summary:"
-echo "  ✓ pigpiod daemon configured and running"
+echo "  ✓ lgpio (Raspberry Pi 5 GPIO library) installed"
 echo "  ✓ Camera permissions set"
 echo "  ✓ Project directories created"
 echo "  ✓ Systemd service installed"
 echo "  ✓ Configuration files generated"
 echo ""
+echo "IMPORTANT: Raspberry Pi 5 uses lgpio (not pigpio)"
+echo "  - No daemon required"
+echo "  - Direct hardware access"
+echo "  - Better performance than pigpio"
+echo ""
 echo "Next steps:"
 echo ""
-echo "1. Verify pigpio is working:"
-echo "   python3 -c 'import pigpio; pi=pigpio.pi(); print(\"Connected:\", pi.connected); pi.stop()'"
+echo "1. Verify lgpio is working:"
+echo "   python3 -c 'import lgpio; chip=lgpio.gpiochip_open(0); print(\"lgpio OK\"); lgpio.gpiochip_close(chip)'"
 echo ""
 echo "2. Test camera access:"
 echo "   python3 -c 'import cv2; print(\"Camera OK:\", cv2.VideoCapture(0).isOpened())'"
@@ -368,9 +313,9 @@ echo "   OR"
 echo "   http://raspberrypi.local:8000"
 echo ""
 echo "Troubleshooting:"
-echo "  - If pigpio fails: sudo pigpiod"
 echo "  - Check camera: ls /dev/video*"
 echo "  - Service logs: sudo journalctl -u flotation -f"
+echo "  - lgpio test: python3 -c 'import lgpio; print(lgpio.gpiochip_open(0))'"
 echo ""
 echo "Configuration files location: $PROJECT_DIR/config/"
 echo "========================================="

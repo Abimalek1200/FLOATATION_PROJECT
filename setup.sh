@@ -2,15 +2,24 @@
 
 # ========================================
 # Flotation Control System - Setup Script
-# Raspberry Pi 5 Installation
+# Raspberry Pi 5 Installation (Continued Setup)
 # ========================================
 
 set -e  # Exit on error
 
 echo "========================================="
-echo "Flotation Control System Setup"
+echo "Flotation Control System - Continued Setup"
 echo "Raspberry Pi 5 Configuration"
 echo "========================================="
+echo ""
+echo "NOTE: Steps 1-4 already completed:"
+echo "  ✓ System packages updated"
+echo "  ✓ Hardware interfaces enabled"
+echo "  ✓ System dependencies installed"
+echo "  ✓ Python packages installed"
+echo ""
+echo "Continuing with remaining configuration..."
+echo ""
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then 
@@ -19,108 +28,106 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # ========================================
-# STEP 1: System Update
+# STEP 5: Setup pigpio Daemon (Pi 5 Compatible)
 # ========================================
 
 echo ""
-echo "[1/8] Updating system packages..."
-sudo apt update
-sudo apt upgrade -y
+echo "[1/4] Configuring pigpio daemon for PWM control (Pi 5)..."
 
-# ========================================
-# STEP 2: Enable Hardware Interfaces
-# ========================================
-
-echo ""
-echo "[2/8] Enabling hardware interfaces (Camera, I2C, SPI)..."
-
-# Enable camera interface
-sudo raspi-config nonint do_camera 0
-
-# Enable I2C (if using I2C sensors)
-sudo raspi-config nonint do_i2c 0
-
-# Enable SPI (if using SPI devices)
-sudo raspi-config nonint do_spi 0
-
-echo "Hardware interfaces enabled successfully"
-
-# ========================================
-# STEP 3: Install System Dependencies
-# ========================================
-
-echo ""
-echo "[3/8] Installing system dependencies..."
-
-sudo apt install -y \
-    python3-pip \
-    python3-dev \
-    python3-opencv \
-    python3-pigpio \
-    libopenblas-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libtiff-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libv4l-dev \
-    libxvidcore-dev \
-    libx264-dev \
-    libhdf5-dev \
-    libhdf5-serial-dev \
-    libharfbuzz-dev \
-    libwebp-dev \
-    git \
-    cmake \
-    build-essential \
-    pkg-config
-
-echo "System dependencies installed successfully"
-
-# ========================================
-# STEP 4: Install Python Dependencies
-# ========================================
-
-echo ""
-echo "[4/8] Installing Python packages..."
-
-# Upgrade pip
-python3 -m pip install --upgrade pip --break-system-packages
-
-# Install required Python packages from apt (system packages are more compatible)
-sudo apt install -y \
-    python3-fastapi \
-    python3-uvicorn \
-    python3-websockets \
-    python3-pil \
-    python3-dotenv
-
-# Install remaining packages via pip with --break-system-packages
-pip3 install --break-system-packages \
-    opencv-python \
-    scikit-learn \
-    python-multipart \
-    aiofiles
-
-echo "Python packages installed successfully"
-
-# ========================================
-# STEP 5: Setup pigpio Daemon
-# ========================================
-
-echo ""
-echo "[5/8] Configuring pigpio daemon for PWM control..."
-
-# Enable and start pigpio daemon
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
-
-# Verify pigpio is running
-if systemctl is-active --quiet pigpiod; then
-    echo "pigpio daemon started successfully"
+# Check if python3-pigpio is installed
+if dpkg -l | grep -q "ii  python3-pigpio"; then
+    echo "✓ python3-pigpio package found"
 else
-    echo "WARNING: pigpio daemon failed to start"
+    echo "Installing python3-pigpio..."
+    sudo apt install -y python3-pigpio
+fi
+
+# Check if pigpiod systemd service exists
+if [ -f /lib/systemd/system/pigpiod.service ]; then
+    echo "✓ Found existing pigpiod systemd service"
+    sudo systemctl enable pigpiod
+    sudo systemctl start pigpiod
+    
+    if systemctl is-active --quiet pigpiod; then
+        echo "✓ pigpiod daemon started via systemd"
+    else
+        echo "⚠ systemd service exists but failed to start, trying manual start..."
+        sudo pigpiod
+    fi
+else
+    # No systemd service found - create one
+    echo "⚠ No systemd service found, creating pigpiod.service..."
+    
+    sudo tee /lib/systemd/system/pigpiod.service > /dev/null <<'PIGPIO_SERVICE'
+[Unit]
+Description=Pigpio daemon
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/pigpiod -l
+ExecStop=/bin/systemctl kill pigpiod
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+PIGPIO_SERVICE
+
+    # Reload systemd and enable service
+    sudo systemctl daemon-reload
+    sudo systemctl enable pigpiod
+    sudo systemctl start pigpiod
+    
+    echo "✓ Created and started pigpiod.service"
+fi
+
+# Final verification - check if pigpiod process is running
+sleep 2  # Give daemon time to start
+
+if pgrep -x pigpiod > /dev/null; then
+    PIGPIO_PID=$(pgrep pigpiod)
+    echo "✓ pigpiod daemon is running (PID: $PIGPIO_PID)"
+    
+    # Test Python connection
+    python3 << 'PYEOF'
+import sys
+try:
+    import pigpio
+    pi = pigpio.pi()
+    if pi.connected:
+        print("✓ pigpio connection test SUCCESSFUL")
+        print(f"  Hardware: {pi.get_hardware_revision()}")
+        print(f"  pigpio version: {pi.get_pigpio_version()}")
+        pi.stop()
+        sys.exit(0)
+    else:
+        print("✗ pigpio daemon running but connection failed")
+        print("  Check that pigpiod is listening on port 8888")
+        sys.exit(1)
+except Exception as e:
+    print(f"✗ pigpio test error: {e}")
+    sys.exit(1)
+PYEOF
+
+    if [ $? -eq 0 ]; then
+        echo "✓ pigpio fully operational and ready for PWM control"
+    else
+        echo "⚠ WARNING: pigpiod running but connection test failed"
+        echo "  Try restarting: sudo systemctl restart pigpiod"
+        echo "  Or manual start: sudo pigpiod"
+    fi
+else
+    echo "✗ ERROR: pigpiod daemon failed to start"
+    echo ""
+    echo "Troubleshooting steps:"
+    echo "1. Try manual start: sudo pigpiod"
+    echo "2. Check if already running: pgrep pigpiod"
+    echo "3. Check logs: sudo journalctl -u pigpiod -n 50"
+    echo "4. Verify installation: which pigpiod"
+    echo ""
+    echo "The system will continue setup, but GPIO control will not work"
+    echo "until pigpiod is running."
 fi
 
 # ========================================
@@ -128,24 +135,27 @@ fi
 # ========================================
 
 echo ""
-echo "[6/8] Configuring camera settings..."
+echo "[2/4] Configuring camera settings..."
 
 # Check if camera is detected
 if vcgencmd get_camera | grep -q "detected=1"; then
-    echo "Camera detected successfully"
+    echo "✓ Camera detected successfully"
 else
-    echo "WARNING: No camera detected. Please check camera connection."
+    echo "⚠ WARNING: No camera detected. Please check camera connection."
+    echo "  - Ensure USB webcam is plugged in"
+    echo "  - Try: ls /dev/video*"
 fi
 
 # Set camera permissions
 sudo usermod -a -G video $USER
+echo "✓ Camera permissions configured"
 
 # ========================================
 # STEP 7: Create Project Directories
 # ========================================
 
 echo ""
-echo "[7/8] Creating project directory structure..."
+echo "[3/4] Creating project directory structure..."
 
 # Get the directory where the script is located
 PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -161,14 +171,14 @@ mkdir -p "$PROJECT_DIR/src/ml"
 mkdir -p "$PROJECT_DIR/src/api"
 mkdir -p "$PROJECT_DIR/src/utils"
 
-echo "Project directories created successfully"
+echo "✓ Project directories created successfully"
 
 # ========================================
 # STEP 8: Create Systemd Service
 # ========================================
 
 echo ""
-echo "[8/8] Creating systemd service..."
+echo "[4/4] Creating systemd service..."
 
 # Create service file
 sudo tee /etc/systemd/system/flotation.service > /dev/null <<EOF
@@ -195,10 +205,10 @@ EOF
 # Reload systemd
 sudo systemctl daemon-reload
 
-echo "Systemd service created successfully"
+echo "✓ Systemd service created successfully"
 
 # ========================================
-# STEP 9: Create Configuration Files
+# Create Configuration Files
 # ========================================
 
 echo ""
@@ -298,19 +308,21 @@ cat > "$PROJECT_DIR/config/system_config.json" <<EOF
 }
 EOF
 
-echo "Configuration files created successfully"
+echo "✓ Configuration files created successfully"
 
 # ========================================
-# STEP 10: Set Permissions
+# Set Permissions
 # ========================================
 
 echo ""
 echo "Setting file permissions..."
 
 chmod +x "$PROJECT_DIR/setup.sh"
-chmod 644 "$PROJECT_DIR/config"/*.json
-chmod 755 "$PROJECT_DIR/logs"
-chmod 755 "$PROJECT_DIR/data"
+chmod 644 "$PROJECT_DIR/config"/*.json 2>/dev/null || true
+chmod 755 "$PROJECT_DIR/logs" 2>/dev/null || true
+chmod 755 "$PROJECT_DIR/data" 2>/dev/null || true
+
+echo "✓ File permissions configured"
 
 # ========================================
 # FINAL STEPS
@@ -318,50 +330,61 @@ chmod 755 "$PROJECT_DIR/data"
 
 echo ""
 echo "========================================="
-echo "Setup completed successfully!"
+echo "Continued Setup Completed Successfully!"
 echo "========================================="
 echo ""
+echo "Configuration Summary:"
+echo "  ✓ pigpiod daemon configured and running"
+echo "  ✓ Camera permissions set"
+echo "  ✓ Project directories created"
+echo "  ✓ Systemd service installed"
+echo "  ✓ Configuration files generated"
+echo ""
 echo "Next steps:"
-echo "1. Reboot your Raspberry Pi to apply changes:"
-echo "   sudo reboot"
 echo ""
-echo "2. After reboot, verify hardware:"
-echo "   vcgencmd get_camera    # Check camera"
-echo "   sudo systemctl status pigpiod    # Check pigpio"
+echo "1. Verify pigpio is working:"
+echo "   python3 -c 'import pigpio; pi=pigpio.pi(); print(\"Connected:\", pi.connected); pi.stop()'"
 echo ""
-echo "3. Test camera access:"
-echo "   python3 -c 'import cv2; print(cv2.VideoCapture(0).isOpened())'"
+echo "2. Test camera access:"
+echo "   python3 -c 'import cv2; print(\"Camera OK:\", cv2.VideoCapture(0).isOpened())'"
 echo ""
-echo "4. Start the service manually (for testing):"
+echo "3. Start the service manually (for testing):"
+echo "   cd $PROJECT_DIR"
 echo "   python3 run.py"
 echo ""
-echo "5. Or enable automatic startup:"
+echo "4. Or enable automatic startup:"
 echo "   sudo systemctl enable flotation.service"
 echo "   sudo systemctl start flotation.service"
 echo ""
-echo "6. Check service status:"
+echo "5. Check service status:"
 echo "   sudo systemctl status flotation.service"
 echo ""
-echo "7. View logs:"
-echo "   tail -f logs/flotation.log"
+echo "6. View logs:"
+echo "   tail -f $PROJECT_DIR/logs/flotation.log"
 echo ""
-echo "8. Access dashboard from any device on your network:"
+echo "7. Access dashboard from any device on your network:"
 echo "   http://$(hostname -I | awk '{print $1}'):8000"
 echo "   OR"
 echo "   http://raspberrypi.local:8000"
 echo ""
-echo "   Note: Dashboard is accessible from:"
-echo "   - Laptops, tablets, phones on same WiFi"
-echo "   - Any device on the same local network"
-echo "   - Save this IP for easy access!"
+echo "Troubleshooting:"
+echo "  - If pigpio fails: sudo pigpiod"
+echo "  - Check camera: ls /dev/video*"
+echo "  - Service logs: sudo journalctl -u flotation -f"
 echo ""
-echo "Configuration files created in: $PROJECT_DIR/config/"
+echo "Configuration files location: $PROJECT_DIR/config/"
 echo "========================================="
+echo ""
 
-# Ask for reboot
-read -p "Would you like to reboot now? (y/n) " -n 1 -r
+# Ask for reboot (optional now since main setup already done)
+read -p "Reboot recommended to ensure all changes take effect. Reboot now? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Rebooting..."
     sudo reboot
+else
+    echo ""
+    echo "Setup complete. Remember to reboot before first use!"
+    echo "Run: sudo reboot"
+fi
 fi

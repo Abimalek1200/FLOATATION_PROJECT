@@ -31,7 +31,7 @@ class PumpDriver:
     
     # GPIO Pin Assignments (from config)
     FROTHER_PUMP_PIN = 12  # Hardware PWM0
-    AGITATOR_PIN = 13      # Hardware PWM1
+    AGITATOR_PIN = 13     # Hardware PWM1
     AIR_PUMP_PIN = 14      # Software PWM
     FEED_PUMP_PIN = 15     # Software PWM
     
@@ -65,9 +65,9 @@ class PumpDriver:
             
             for pin in all_pins:
                 # Claim pin as output
-                lgpio.gpio_claim_output(self.chip, pin)
-                # Initialize PWM at 0% duty cycle
-                lgpio.tx_pwm(self.chip, pin, self.PWM_FREQUENCY, 0)
+                lgpio.gpio_claim_output(self.chip, int(pin))
+                # Initialize PWM at 0% duty cycle (all args must be int)
+                lgpio.tx_pwm(self.chip, int(pin), int(self.PWM_FREQUENCY), 0)
                 logger.debug(f"Initialized GPIO {pin} for PWM control")
             
             logger.info("All pump pins initialized successfully (lgpio)")
@@ -94,11 +94,10 @@ class PumpDriver:
         duty_cycle = max(0.0, min(100.0, duty_cycle))
         
         try:
-            # lgpio.tx_pwm requires integer arguments
-            # Convert duty_cycle to int (0-100)
-            duty_cycle_int = int(round(duty_cycle))
-            lgpio.tx_pwm(self.chip, pin, self.PWM_FREQUENCY, duty_cycle_int)
-            logger.debug(f"GPIO {pin} set to {duty_cycle_int}% duty cycle")
+            # lgpio.tx_pwm requires ALL arguments to be integers
+            # Args: (handle, gpio_pin, frequency, duty_cycle)
+            lgpio.tx_pwm(self.chip, int(pin), int(self.PWM_FREQUENCY), int(round(duty_cycle)))
+            logger.debug(f"GPIO {pin} set to {int(round(duty_cycle))}% duty cycle")
             
         except Exception as e:
             logger.error(f"Failed to set duty cycle on GPIO {pin}: {e}")

@@ -204,11 +204,7 @@ async def vision_processing_loop():
             
             # Check for anomalies
             if system_state['anomaly_detector'] and system_state['anomaly_detector'].is_trained:
-                features = [
-                    metrics['bubble_count'],
-                    metrics['avg_bubble_size'],
-                    metrics['size_std_dev'],
-                    metrics['coverage_ratio']
+                features = [metrics['bubble_count'],metrics['avg_bubble_size'],metrics['size_std_dev'],metrics['coverage_ratio']
                 ]
                 anomaly = system_state['anomaly_detector'].predict(features)
                 metrics['anomaly_detected'] = (anomaly == -1)

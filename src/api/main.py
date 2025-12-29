@@ -7,6 +7,7 @@ Handles startup/shutdown of vision, control, and anomaly detection systems.
 
 import logging
 import asyncio
+import numpy as np
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -181,10 +182,25 @@ async def vision_processing_loop():
                 await asyncio.sleep(0.1)
                 continue
             
-            # Process frame
-            processed = preprocessor.preprocess(frame)
-            bubble_data = detector.detect_bubbles(processed['binary'])
-            metrics = analyzer.analyze_frame(bubble_data, frame)
+            # Process frame - use correct method names
+            processed = preprocessor.process(frame)
+            binary_mask = processed.get('closing', processed.get('binary'))
+            
+            if binary_mask is None:
+                logger.warning("Preprocessing failed")
+                await asyncio.sleep(0.1)
+                continue
+            
+            bubble_data = detector.detect(binary_mask, frame)
+            
+            # Extract metrics from bubble detection
+            metrics = {
+                'bubble_count': bubble_data['count'],
+                'avg_bubble_size': bubble_data.get('avg_diameter', 0.0),
+                'size_std_dev': np.std(bubble_data['diameters']) if bubble_data['diameters'] else 0.0,
+                'coverage_ratio': len(bubble_data['diameters']) / max(frame.shape[0] * frame.shape[1] / 1000, 1),
+                'froth_stability': 0.0  # Can be calculated from analyzer history
+            }
             
             # Check for anomalies
             if system_state['anomaly_detector'] and system_state['anomaly_detector'].is_trained:
@@ -212,7 +228,14 @@ async def vision_processing_loop():
                 pass  # Skip if queue full
             
             # Send annotated frame to WebSocket queue
-            annotated_frame = analyzer.get_annotated_frame()
+            # Create annotated frame with detected bubbles
+            annotated_frame = frame.copy()
+            if 'markers' in bubble_data:
+                # Draw bubble markers on frame
+                import cv2 as cv
+                markers = bubble_data['markers']
+                annotated_frame[markers > 1] = [0, 255, 0]  # Green overlay for bubbles
+            
             if annotated_frame is not None:
                 try:
                     system_state['frame_queue'].put_nowait(annotated_frame)

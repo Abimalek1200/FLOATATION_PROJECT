@@ -94,9 +94,11 @@ class PumpDriver:
         duty_cycle = max(0.0, min(100.0, duty_cycle))
         
         try:
-            # lgpio tx_pwm uses 0-100 duty cycle directly
-            lgpio.tx_pwm(self.chip, pin, self.PWM_FREQUENCY, duty_cycle)
-            logger.debug(f"GPIO {pin} set to {duty_cycle:.1f}% duty cycle")
+            # lgpio.tx_pwm requires integer arguments
+            # Convert duty_cycle to int (0-100)
+            duty_cycle_int = int(round(duty_cycle))
+            lgpio.tx_pwm(self.chip, pin, self.PWM_FREQUENCY, duty_cycle_int)
+            logger.debug(f"GPIO {pin} set to {duty_cycle_int}% duty cycle")
             
         except Exception as e:
             logger.error(f"Failed to set duty cycle on GPIO {pin}: {e}")
